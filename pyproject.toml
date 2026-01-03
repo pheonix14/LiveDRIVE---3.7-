@@ -1,0 +1,12 @@
+[project]
+name = "python-template"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.1.2",
+    "flask-socketio>=5.6.0",
+    "requests>=2.32.5",
+    "streamlit>=1.52.2",
+]
