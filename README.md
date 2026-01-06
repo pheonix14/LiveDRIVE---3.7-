@@ -1,4 +1,4 @@
-# LiveDRIVE---3.7- WATCH TOGETHER WITH ANYONE ANYTHING 
+# LiveDRIVE---5.2- WATCH TOGETHER WITH ANYONE ANYTHING 
 One thing which was fucked up for me was that , i didnt have much internet also websites like watch2gether doesnt support anime and netflix, OFC IM SINGLE.
 BUT you might not be , OR
 You may have internet shortage issues or u may like anoynomity THIS IS THE BEST TOOL FOR YOU
