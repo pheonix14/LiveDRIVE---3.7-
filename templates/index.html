@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watch2Gether</title>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<style>
+:root {
+  --bg:#0f0f0f;
+  --panel:#1b1b1b;
+  --accent:#4f8cff;
+  --muted:#777;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: #eee;
+  font-family: system-ui, sans-serif;
+}
+
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 12px;
+}
+
+.card {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+h2 { text-align: center; }
+
+input, button {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 16px;
+}
+
+input {
+  background: #2a2a2a;
+  color: #fff;
+  width: 100%;
+}
+
+input:disabled {
+  background: #1f1f1f;
+  color: var(--muted);
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary { background: #333; }
+
+button:disabled {
+  background: #444;
+  cursor: not-allowed;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row > * { flex: 1; }
+
+video {
+  width: 100%;
+  border-radius: 10px;
+  background: black;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.controls button { flex: 1; }
+
+#chat, #logs {
+  height: 160px;
+  overflow-y: auto;
+  font-size: 14px;
+}
+
+.chat-line { margin-bottom: 4px; }
+
+.system {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hidden { display: none; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>🎬 Watch2Gether</h2>
+
+<!-- NAME -->
+<div class="card">
+  <div class="row">
+    <input id="name" placeholder="Your name">
+    <button id="setNameBtn" onclick="setName()">Set</button>
+  </div>
+</div>
+
+<!-- LOAD -->
+<div class="card">
+  <input id="url" placeholder="Google Drive video link">
+  <button style="margin-top:8px" onclick="loadVideo()">Load Video</button>
+</div>
+
+<!-- VIDEO -->
+<div class="card">
+  <video id="video" muted playsinline></video>
+
+  <div class="controls">
+    <button onclick="playVid()">▶ Play</button>
+    <button class="secondary" onclick="pauseVid()">⏸ Pause</button>
+  </div>
+
+  <input id="seek" type="range" min="0" max="100" value="0">
+</div>
+
+<!-- CHAT -->
+<div class="card">
+  <div id="chat"></div>
+  <div class="row" style="margin-top:8px">
+    <input id="msg" placeholder="Message">
+    <button onclick="sendMsg()">Send</button>
+  </div>
+</div>
+
+<!-- LOGS -->
+<div class="card">
+  <button class="secondary" onclick="toggleLogs()">📜 Toggle Logs</button>
+  <div id="logs" class="hidden"></div>
+</div>
+
+</div>
+
+<script>
+/* ---------- SOCKET ---------- */
+const socket = io({ transports: ["polling"] });
+
+const video = document.getElementById("video");
+const seek = document.getElementById("seek");
+const chat = document.getElementById("chat");
+const logs = document.getElementById("logs");
+
+const nameInput = document.getElementById("name");
+const setNameBtn = document.getElementById("setNameBtn");
+
+let nameLocked = false;
+
+/* ---------- LOG ---------- */
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  logs.innerHTML += `<div>[${t}] ${msg}</div>`;
+  logs.scrollTop = logs.scrollHeight;
+}
+
+/* ---------- NAME ---------- */
+function setName() {
+  if (nameLocked) return;
+
+  const n = nameInput.value.trim();
+  if (!n) return;
+
+  socket.emit("set_name", { name: n });
+
+  nameLocked = true;
+  nameInput.disabled = true;
+  setNameBtn.disabled = true;
+
+  log("Name set → " + n);
+}
+
+nameInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    setName();
+  }
+});
+
+/* ---------- LOAD ---------- */
+function loadVideo() {
+  fetch("/load", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: document.getElementById("url").value })
+  });
+  log("Video load requested");
+}
+
+/* ---------- CONTROLS ---------- */
+function playVid() {
+  video.muted = false;
+  video.play().catch(()=>{});
+  socket.emit("play", { time: video.currentTime });
+  log("Play");
+}
+
+function pauseVid() {
+  video.pause();
+  socket.emit("pause", { time: video.currentTime });
+  log("Pause");
+}
+
+seek.onchange = () => {
+  const t = (seek.value / 100) * video.duration;
+  video.currentTime = t;
+  socket.emit("seek", { time: t });
+  log("Seek → " + t.toFixed(2));
+};
+
+video.ontimeupdate = () => {
+  if (video.duration)
+    seek.value = (video.currentTime / video.duration) * 100;
+};
+
+/* ---------- CHAT ---------- */
+function sendMsg() {
+  const m = document.getElementById("msg").value.trim();
+  if (!m) return;
+  socket.emit("chat", { msg: m });
+  document.getElementById("msg").value = "";
+}
+
+document.getElementById("msg").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendMsg();
+  }
+});
+
+/* ---------- SYNC HELP ---------- */
+function safeSync(serverTime) {
+  const drift = Math.abs(video.currentTime - serverTime);
+  if (drift > 1.5) {
+    log("Correcting drift: " + drift.toFixed(2) + "s");
+    video.currentTime = serverTime;
+  }
+}
+
+/* ---------- SOCKET EVENTS ---------- */
+socket.on("video_loaded", d => {
+  video.src = `/video/${d.video}`;
+  video.load();
+  log("Video loaded");
+});
+
+socket.on("sync_state", s => {
+  if (s.video) video.src = `/video/${s.video}`;
+  safeSync(s.time || 0);
+  s.is_playing ? video.play() : video.pause();
+  log("Initial sync");
+});
+
+socket.on("play", s => {
+  safeSync(s.time);
+  video.play();
+  log("Remote play");
+});
+
+socket.on("pause", s => {
+  safeSync(s.time);
+  video.pause();
+  log("Remote pause");
+});
+
+socket.on("seek", s => {
+  safeSync(s.time);
+  log("Remote seek");
+});
+
+socket.on("chat", d => {
+  chat.innerHTML += `<div class="chat-line"><b>${d.name}:</b> ${d.msg}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+});
+
+socket.on("system", d => {
+  chat.innerHTML += `<div class="chat-line system">${d.msg}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+});
+
+/* ---------- LOG TOGGLE ---------- */
+function toggleLogs() {
+  logs.classList.toggle("hidden");
+}
+</script>
+
+</body>
+</html>
